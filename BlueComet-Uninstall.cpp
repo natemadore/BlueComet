@@ -27,13 +27,13 @@ int main() {
     }
 
     /* Stop the memory leak */
-     for (int i = 0; i < 10000; i++) { // loop 10,000 times to free up memory
-    char* buffer = new char[1024 * 1024]; // allocate 1 MB of memory
-    memset(buffer, rand() % 256, 1024 * 1024); // fill with random binary
-    delete[] buffer; // free memory
-}
+    for (int i = 0; i < 10000; i++) { // loop 10,000 times to free up memory
+        char* buffer = new char[1024 * 1024]; // allocate 1 MB of memory
+        memset(buffer, rand() % 256, 1024 * 1024); // fill with random binary
+        delete[] buffer; // free memory
     }
     std::cout << "Congrats. Don't run this outside of VM." << std::endl;
 
     return 0;
 }
+
