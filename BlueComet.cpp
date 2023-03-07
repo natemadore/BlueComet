@@ -31,6 +31,12 @@ int main() {
     char input[11];
     bool stopProgram = false;
     int loopCount = 0;
+	
+	   /* Set console to full screen mode */
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(hConsole, &csbi);
+    SetConsoleDisplayMode(hConsole, CONSOLE_FULLSCREEN_MODE, &csbi);
 
     while (!stopProgram) {
         for (int j = 0; j < 1024 * 1024; j++) { // add 1 MB of binary for each loop j
